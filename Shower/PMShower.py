@@ -7,7 +7,7 @@ class PMShower:
 	def __init__(self,
 	             start_date=None,
 	             end_date=None):
-		self.items = []
+		self.list_items = []
 		if start_date is None:
 			self.start_date = self.set_date("start")
 		else:
@@ -25,10 +25,10 @@ class PMShower:
 
 	def add_item(self):
 		item = PMItem(
-			Trader_Short_Id=None
+			Trader_Id=None
 		)
-		self.items.append(item)
+		self.list_items.append(item)
 
 	def show(self):
-		data = data_collector(self.items)
+		data = data_collector(self.list_items)
 		pass
