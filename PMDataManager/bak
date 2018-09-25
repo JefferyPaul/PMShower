@@ -1,0 +1,13 @@
+database2 = "Platinum.PM"
+host2 = "192.168.1.101"
+user2 = "sa"
+pwd2 = "st@s2013"
+conn_info2 = 'DRIVER={SQL Server};DATABASE=%s;SERVER=%s;UID=%s;PWD=%s'%(database2, host2, user2, pwd2)
+conn2 = pyodbc.connect(conn_info2)
+
+database1 = "= "Platinum.Settle.Paper"
+host1 = "= "atsasset.com"
+user1 = "sa"
+pwd1 = "st@s2013"
+conn_info1 = 'DRIVER={SQL Server};DATABASE=%s;SERVER=%s;UID=%s;PWD=%s'%(database1, host1, user1, pwd1)
+conn1 =  = pyodbc.connect(con(conn_info1)
