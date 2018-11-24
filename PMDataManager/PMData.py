@@ -1,4 +1,5 @@
 from datetime import datetime
+import pandas as pd
 
 
 class PMData:
@@ -47,38 +48,66 @@ class PMProduct(PMData):
 class PMStrategy(PMData):
 	def __init__(self, Id, portfolio_user_id='Benchmark'):
 		PMData.__init__(self, Id=Id, type='Strategy')
-		self.traders = []
+		self.traders_id = []
+		self.traders_weight = pd.DataFrame(columns=['Date', 'TraderId', 'Weight'])
 		self.portfolio_user_id = portfolio_user_id
 
-	def calculate_pnl(self):
-		pass
+		self.traders = []
+		self.pnl = 0
 
 	def get_traders_sql(self):
 		sql = '''
 			SELECT Id
 		      FROM [Platinum.PM].[dbo].[TraderDbo]
-             where StrategyId = '%s''
+             where StrategyId = '%s'
         ''' % self.Id
 		return sql
 
 	def get_portfolio_sql(self):
 		sql = '''
-			SELECT [Date],[UserId],[TraderId],[Weight]
-			  [Platinum.PM].[dbo].[PortfolioTraderWeightDbo]
+			SELECT [Date],[TraderId],[Weight]
+			  FROM [Platinum.PM].[dbo].[PortfolioTraderWeightDbo]
 			  where UserId = '%s' and TraderId in ('%s')
-	    ''' % (self.portfolio_user_id, "','".join(self.traders))
+	    ''' % (self.portfolio_user_id, "','".join(self.traders_id))
 		return sql
-		
+
+	def set_strategy_traders(self, l):
+		self.traders_id = pd.DataFrame(l).loc[:, 0].tolist()
+
+	def set_portfolio(self, l):
+		if len(self.traders_id) > 0:
+			df = pd.DataFrame(l, columns=['Date', 'TraderId', 'Weight'])
+			self.traders_weight = df
+		else:
+			print('Wrong in PMStrategy.set_portfolio, no traders')
+
+	def calculate_pnl(self):
+
+		pass
+
 
 class PMTrader(PMData):
 	def __init__(self, Id):
 		PMData.__init__(self, Id=Id, type='Trader')
-		self.pnl = 0
+		self.pnl = pd.DataFrame(columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital', 'Returns'])
 
 	def get_pnl_sql(self):
 		sql = '''
-			SELECT *
+			SELECT [Date],[TraderId],[Pnl],[Commission],[Slippage],[Capital]
 		    FROM [Platinum.PM].[dbo].[TraderLogDbo]
 		    where TraderId = '%s' and  Date>'%s' and Date < '%s'
         ''' % (self.Id, self.start_date.strftime('%Y%m%d'), self.end_date.strftime('%Y%m%d'))
 		return sql
+
+	def set_pnl(self, df):
+		if type(df) == pd.DataFrame:
+			df = pd.DataFrame(df, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])
+			pass
+		else:
+			try:
+				df = pd.DataFrame(df, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])
+			except:
+				print('Wrong in PMTrader.set_pnl, because the input df type is wrong')
+
+		df['Returns'] = df['Pnl'] / df['Commission']
+		self.pnl = df
