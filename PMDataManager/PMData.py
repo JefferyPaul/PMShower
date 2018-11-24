@@ -48,42 +48,65 @@ class PMProduct(PMData):
 class PMStrategy(PMData):
 	def __init__(self, Id, portfolio_user_id='Benchmark'):
 		PMData.__init__(self, Id=Id, type='Strategy')
-		self.traders_id = []
+		self.list_traders_id = []
 		self.traders_weight = pd.DataFrame(columns=['Date', 'TraderId', 'Weight'])
 		self.portfolio_user_id = portfolio_user_id
 
-		self.traders = []
-		self.pnl = 0
+		self.list_traders = []
+		self.pnl = pd.DataFrame(columns=['Returns'])
 
-	def get_traders_sql(self):
+	def get_traders_id(self, sql_exec):
 		sql = '''
 			SELECT Id
 		      FROM [Platinum.PM].[dbo].[TraderDbo]
              where StrategyId = '%s'
         ''' % self.Id
-		return sql
+		re_sql = sql_exec(sql)
+		self.list_traders_id = pd.DataFrame(re_sql).loc[:, 0].tolist()
 
-	def get_portfolio_sql(self):
-		sql = '''
-			SELECT [Date],[TraderId],[Weight]
-			  FROM [Platinum.PM].[dbo].[PortfolioTraderWeightDbo]
-			  where UserId = '%s' and TraderId in ('%s')
-	    ''' % (self.portfolio_user_id, "','".join(self.traders_id))
-		return sql
-
-	def set_strategy_traders(self, l):
-		self.traders_id = pd.DataFrame(l).loc[:, 0].tolist()
-
-	def set_portfolio(self, l):
-		if len(self.traders_id) > 0:
-			df = pd.DataFrame(l, columns=['Date', 'TraderId', 'Weight'])
-			self.traders_weight = df
+	def get_portfolio_sql(self, sql_exec):
+		if len(self.list_traders_id) < 1:
+			pass
 		else:
-			print('Wrong in PMStrategy.set_portfolio, no traders')
+			sql = '''
+				SELECT [Date],[TraderId],[Weight]
+				  FROM [Platinum.PM].[dbo].[PortfolioTraderWeightDbo]
+				  where UserId = '%s' and TraderId in ('%s')
+		    ''' % (self.portfolio_user_id, "','".join(self.list_traders_id))
+			re_sql = sql_exec(sql)
+			df = pd.DataFrame(re_sql, columns=['Date', 'TraderId', 'Weight'])
+			self.traders_weight = df
+
+	def get_strategy_traders(self, sql_exec):
+		if len(self.list_traders_id) < 1:
+			pass
+		else:
+			for trader_id in self.list_traders_id:
+				trader = PMTrader(Id=trader_id)
+				trader.set_start_date(self.start_date)
+				trader.set_end_date(self.end_date)
+				trader.get_pnl(sql_exec)
+				self.list_traders.append(trader)
+			print('%s - Get Strategy Traders - Done' % self.Id)
 
 	def calculate_pnl(self):
+		if len(self.list_traders) < 1:
+			pass
+		else:
+			l_df = []
+			for trader in self.list_traders:
+				df_pnl = trader.pnl
+				df_weight = self.traders_weight
 
-		pass
+				df_merge = pd.merge(left=df_pnl, right=df_weight, on=['TraderId', 'Date'], how='left')
+				df_merge = df_merge.sort_values(by=['TraderId', 'Date'])
+				df_merge = df_merge.fillna(method='ffill')
+				df_merge = df_merge.fillna(1)
+				df_merge['portfolio_returns'] = df_merge['Returns'] * df_merge['Weight']
+				l_df.append(df_merge)
+			df = pd.DataFrame(pd.concat(l_df))
+			df_r = pd.DataFrame(df.groupby(by='Date')['Returns'].sum())
+			self.pnl = df_r
 
 
 class PMTrader(PMData):
@@ -91,23 +114,13 @@ class PMTrader(PMData):
 		PMData.__init__(self, Id=Id, type='Trader')
 		self.pnl = pd.DataFrame(columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital', 'Returns'])
 
-	def get_pnl_sql(self):
+	def get_pnl(self, sql_exec):
 		sql = '''
 			SELECT [Date],[TraderId],[Pnl],[Commission],[Slippage],[Capital]
 		    FROM [Platinum.PM].[dbo].[TraderLogDbo]
 		    where TraderId = '%s' and  Date>'%s' and Date < '%s'
         ''' % (self.Id, self.start_date.strftime('%Y%m%d'), self.end_date.strftime('%Y%m%d'))
-		return sql
-
-	def set_pnl(self, df):
-		if type(df) == pd.DataFrame:
-			df = pd.DataFrame(df, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])
-			pass
-		else:
-			try:
-				df = pd.DataFrame(df, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])
-			except:
-				print('Wrong in PMTrader.set_pnl, because the input df type is wrong')
-
-		df['Returns'] = df['Pnl'] / df['Commission']
+		re_sql = sql_exec(sql)
+		df = pd.DataFrame(re_sql, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])
+		df['Returns'] = df['Pnl'] / df['Capital']
 		self.pnl = df
