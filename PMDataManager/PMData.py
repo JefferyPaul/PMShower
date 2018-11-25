@@ -27,33 +27,86 @@ class PMData:
 
 
 class PMProduct(PMData):
-	def __init__(self, Id, user):
+	def __init__(self, Id, user, product_start_at_create=True, strategy_use_last_portfolio=False):
 		PMData.__init__(self, Id=Id, type='Product')
 		self.portfolio_user_id = user
-		self.strategies = []
-		self.strategies_weight = []
+		self.list_strategies_id = []
+		self.strategies_weight = pd.DataFrame(columns=['Date', 'StrategyId', 'PortfolioUserId', 'Weight'])
 
-	def calculate_pnl(self):
-		pass
+		self.product_start_at_create = product_start_at_create
+		self.strategy_use_last_portfolio = strategy_use_last_portfolio
 
-	def get_strategies_sql(self):
+		self.list_strategies = []
+		self.pnl = pd.DataFrame()
+
+	def get_product_inf(self, sql_exec):
 		sql = '''
-			SELECT *
+			SELECT [Date],[StrategyId],[PortfolioUserId],[Weight]
 			  FROM [Platinum.PM].[dbo].[ProductPortfolioWeightDbo]
 			  where ProductId = '%s' and PortfolioUserId = '%s'
         ''' % (self.Id, self.portfolio_user_id)
-		return sql
+		re_sql = sql_exec(sql)
+		df = pd.DataFrame(re_sql, columns=['Date', 'StrategyId', 'PortfolioUserId', 'Weight'])
+		self.strategies_weight = df
+		self.list_strategies_id = df['StrategyId'].tolist()
+
+		if self.product_start_at_create:
+			create_date = min(df['Date'].tolist())
+			self.start_date = datetime.strptime(create_date, '%Y%m%d')
+
+	def get_product_strategies(self, sql_exec):
+		if len(self.list_strategies_id) < 1:
+			pass
+		else:
+			for strategy_id in self.list_strategies_id:
+				strategy_portfolio_user_id = self.strategies_weight.loc[self.strategies_weight['StrategyId'] == strategy_id,
+				                                                        'PortfolioUserId'].tolist()[0]
+				strategy = PMStrategy(Id=strategy_id, portfolio_user_id=strategy_portfolio_user_id,
+				                      use_last_portfolio=self.strategy_use_last_portfolio)
+				strategy.set_start_date(self.start_date)
+				strategy.set_end_date(self.end_date)
+
+				strategy.get_traders_id(sql_exec)
+				strategy.get_portfolio(sql_exec)
+				strategy.get_strategy_traders(sql_exec)
+				strategy.calculate_pnl()
+				self.list_strategies.append(strategy)
+
+	def calculate_pnl(self):
+		if len(self.list_strategies) < 1:
+			pass
+		else:
+			l_df = []
+			for strategy in self.list_strategies:
+				df_pnl = strategy.pnl
+				df_weight = self.strategies_weight.loc[self.strategies_weight['StrategyId'] == strategy.Id, :]
+
+				df_merge = pd.merge(left=df_pnl, right=df_weight, on='Date', how='left')
+				df_merge = df_merge.sort_values(by='Date')
+				df_merge = df_merge.fillna(method='ffill')
+				if self.product_start_at_create:
+					df_merge = df_merge.fillna(0)
+				else:
+					df_merge = df_merge.fillna(method='bfill')
+				df_merge['portfolio_returns'] = df_merge['Returns'] * df_merge['Weight']
+				l_df.append(df_merge)
+			df = pd.DataFrame(pd.concat(l_df))
+			df_r = pd.DataFrame(df.groupby(by='Date')['portfolio_returns'].sum())
+			df_r.rename(columns={'portfolio_returns': 'Returns'}, inplace=True)
+			self.pnl = df_r
 
 
 class PMStrategy(PMData):
-	def __init__(self, Id, portfolio_user_id='Benchmark'):
+	def __init__(self, Id, portfolio_user_id='Benchmark', use_last_portfolio=False):
 		PMData.__init__(self, Id=Id, type='Strategy')
 		self.list_traders_id = []
 		self.traders_weight = pd.DataFrame(columns=['Date', 'TraderId', 'Weight'])
 		self.portfolio_user_id = portfolio_user_id
+		
+		self.use_last_portfolio = use_last_portfolio
 
 		self.list_traders = []
-		self.pnl = pd.DataFrame(columns=['Returns'])
+		self.pnl = pd.DataFrame(columns=['Date', 'Returns'])
 
 	def get_traders_id(self, sql_exec):
 		sql = '''
@@ -64,7 +117,7 @@ class PMStrategy(PMData):
 		re_sql = sql_exec(sql)
 		self.list_traders_id = pd.DataFrame(re_sql).loc[:, 0].tolist()
 
-	def get_portfolio_sql(self, sql_exec):
+	def get_portfolio(self, sql_exec):
 		if len(self.list_traders_id) < 1:
 			pass
 		else:
@@ -75,7 +128,13 @@ class PMStrategy(PMData):
 		    ''' % (self.portfolio_user_id, "','".join(self.list_traders_id))
 			re_sql = sql_exec(sql)
 			df = pd.DataFrame(re_sql, columns=['Date', 'TraderId', 'Weight'])
-			self.traders_weight = df
+			
+			if not self.use_last_portfolio:
+				self.traders_weight = df
+			else:
+				last_date = max(set(df['Date'].tolist()))
+				df = df.loc[df['Date'] == last_date, :]
+				self.traders_weight = df
 
 	def get_strategy_traders(self, sql_exec):
 		if len(self.list_traders_id) < 1:
@@ -101,11 +160,13 @@ class PMStrategy(PMData):
 				df_merge = pd.merge(left=df_pnl, right=df_weight, on=['TraderId', 'Date'], how='left')
 				df_merge = df_merge.sort_values(by=['TraderId', 'Date'])
 				df_merge = df_merge.fillna(method='ffill')
-				df_merge = df_merge.fillna(1)
+				df_merge = df_merge.fillna(method='bfill')
 				df_merge['portfolio_returns'] = df_merge['Returns'] * df_merge['Weight']
 				l_df.append(df_merge)
 			df = pd.DataFrame(pd.concat(l_df))
-			df_r = pd.DataFrame(df.groupby(by='Date')['Returns'].sum())
+			df_r = pd.DataFrame(df.groupby(by='Date')['portfolio_returns'].sum())
+			df_r.rename(columns = {'portfolio_returns': 'Returns'}, inplace=True)
+			df_r['Date'] = df_r.index
 			self.pnl = df_r
 
 
@@ -118,7 +179,7 @@ class PMTrader(PMData):
 		sql = '''
 			SELECT [Date],[TraderId],[Pnl],[Commission],[Slippage],[Capital]
 		    FROM [Platinum.PM].[dbo].[TraderLogDbo]
-		    where TraderId = '%s' and  Date>'%s' and Date < '%s'
+		    where TraderId = '%s' and  Date>='%s' and Date<='%s'
         ''' % (self.Id, self.start_date.strftime('%Y%m%d'), self.end_date.strftime('%Y%m%d'))
 		re_sql = sql_exec(sql)
 		df = pd.DataFrame(re_sql, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital'])

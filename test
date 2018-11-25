@@ -11,6 +11,8 @@ pwd = "st@s2013"
 mssql = MSSQL(host=host, user=user, pwd=pwd, db=db)
 func_sql_exec = mssql.ExecQuery
 
+
+'''
 strategy = PMStrategy(Id='China.Commodities.Id002022E', portfolio_user_id='Jeffery')
 strategy.set_start_date(datetime(2017, 7, 1))
 
@@ -19,3 +21,16 @@ strategy.get_portfolio_sql(func_sql_exec)
 strategy.get_strategy_traders(func_sql_exec)
 
 strategy.calculate_pnl()
+mssql.close()
+'''
+
+'''
+product = PMProduct('Prop.Id807035.MFA_T0', user='Jeffery', strategy_use_last_portfolio=True)
+
+product.get_product_inf(func_sql_exec)
+product.get_product_strategies(func_sql_exec)
+
+product.calculate_pnl()
+plt.plot(product.pnl.cumsum())
+mssql.close()
+'''
