@@ -17,7 +17,7 @@ strategy = PMStrategy(Id='China.Commodities.Id002022E', portfolio_user_id='Jeffe
 strategy.set_start_date(datetime(2017, 7, 1))
 
 strategy.get_traders_id(func_sql_exec)
-strategy.get_portfolio_sql(func_sql_exec)
+strategy.get_portfolio(func_sql_exec)
 strategy.get_strategy_traders(func_sql_exec)
 
 strategy.calculate_pnl()

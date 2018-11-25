@@ -33,8 +33,14 @@ class PMData:
 
 			annualized_std = r_describe['std'] * np.sqrt(250)
 			daily_return = r_describe['mean']
-			annualized_return = r_describe['mean'] / r_describe['count'] * 250
-			sharp = annualized_return / annualized_std
+			try:
+				annualized_return = r_describe['mean'] * 250
+			except:
+				annualized_return = np.nan
+			try:
+				sharp = annualized_return / annualized_std
+			except:
+				sharp = np.nan
 
 			dict_stat = {"annualized_std": annualized_std,
 			             "daily_return": daily_return,
@@ -59,18 +65,22 @@ class PMData:
 			mdd_start_date = int(
 				df_cum.loc[series_mdd['max_here_index'], 'Date']).__str__()
 
-			series_lddp = df_cum.loc[df_cum['dd_period']==df_cum['dd_period'].max(), :]
-			lddp = int(series_lddp['dd_period']).__str__()
-			lddp_end_date = int(series_lddp['Date']).__str__()
-			lddp_start_date = int(
-				df_cum.loc[series_lddp.index - series_lddp['dd_period'], 'Date']).__str__()
+			try:
+				series_lddp = df_cum.loc[df_cum['dd_period']==df_cum['dd_period'].max(), :]
+				lddp = int(series_lddp['dd_period']).__str__()
+				lddp_end_date = int(series_lddp['Date']).__str__()
+				lddp_start_date = int(
+					df_cum.loc[series_lddp.index - series_lddp['dd_period'], 'Date']).__str__()
 
-			dict_mdd = {"mdd":mdd,
-			            "mdd_date":mdd_date,
-			            "mdd_start_date":mdd_start_date,
-			            "lddp":lddp,
-			            "lddp_end_date":lddp_end_date,
-			            "lddp_start_date":lddp_start_date}
+				dict_mdd = {"mdd":mdd,
+				            "mdd_date":mdd_date,
+				            "mdd_start_date":mdd_start_date,
+				            "lddp":lddp,
+				            "lddp_end_date":lddp_end_date,
+				            "lddp_start_date":lddp_start_date}
+			except:
+				dict_mdd = {}
+				print('Wrong in cal_mdd  %s' %self.Id)
 			return dict_mdd
 
 		if df is None:
@@ -229,7 +239,7 @@ class PMStrategy(PMData):
 				trader.set_end_date(self.end_date)
 				trader.get_pnl(sql_exec)
 				self.list_traders.append(trader)
-			print('%s - Get Strategy Traders - Done' % self.Id)
+			# print('%s - Get Strategy Traders - Done' % self.Id)
 
 	def calculate_pnl(self):
 		if len(self.list_traders) < 1:
@@ -240,10 +250,18 @@ class PMStrategy(PMData):
 				df_pnl = trader.pnl
 				df_weight = self.traders_weight
 
-				df_merge = pd.merge(left=df_pnl, right=df_weight, on=['TraderId', 'Date'], how='left')
-				df_merge = df_merge.sort_values(by=['TraderId', 'Date'])
-				df_merge = df_merge.fillna(method='ffill')
-				df_merge = df_merge.fillna(method='bfill')
+				if True in [d in df_pnl['Date'].unique().tolist() for d in df_weight['Date'].unique().tolist()]:
+					df_merge = pd.merge(left=df_pnl, right=df_weight, on=['TraderId', 'Date'], how='left')
+					df_merge = df_merge.sort_values(by=['TraderId', 'Date'])
+					df_merge = df_merge.fillna(method='ffill')
+					df_merge = df_merge.fillna(method='bfill')
+				else:
+					df_weight = df_weight.loc[df_weight['Date'] == max(df_weight['Date'].unique()), :]
+					df_weight = df_weight[['TraderId', 'Weight']]
+					df_merge = pd.merge(left=df_pnl, right=df_weight, on=['TraderId'], how='left')
+					df_merge = df_merge.sort_values(by=['TraderId', 'Date'])
+					df_merge = df_merge.fillna(method='ffill')
+					df_merge = df_merge.fillna(method='bfill')
 				df_merge['portfolio_returns'] = df_merge['Returns'] * df_merge['Weight']
 				l_df.append(df_merge)
 			df = pd.DataFrame(pd.concat(l_df))
