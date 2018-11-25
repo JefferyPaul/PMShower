@@ -31,6 +31,13 @@ product.get_product_inf(func_sql_exec)
 product.get_product_strategies(func_sql_exec)
 
 product.calculate_pnl()
-plt.plot(product.pnl.cumsum())
+d1 = product.cal_describe()
+product.pnl_standardize()
+d2 = product.cal_describe(product.std_pnl)
+
+product.pnl.cumsum().plot()
+product.std_pnl.cumsum().plot()
+
 mssql.close()
 '''
+
