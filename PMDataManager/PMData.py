@@ -31,10 +31,10 @@ class PMData:
 			df = pd.DataFrame(df)
 			r_describe = df['Returns'].describe()
 
-			annualized_std = r_describe['std'] * np.sqrt(250)
-			daily_return = r_describe['mean']
+			annualized_std = float(r_describe['std']) * np.sqrt(250)
+			daily_return = float(r_describe['mean'])
 			try:
-				annualized_return = r_describe['mean'] * 250
+				annualized_return = daily_return * 250
 			except:
 				annualized_return = np.nan
 			try:

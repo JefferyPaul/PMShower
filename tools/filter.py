@@ -2,6 +2,8 @@ from SQL.MSSQL import MSSQL
 from PMDataManager.PMData import *
 from datetime import datetime
 import pandas as pd
+from pyecharts import Line,Grid
+import os
 
 
 type = '''
@@ -63,8 +65,35 @@ def select_strategy(list_type, func_sql_exec):
 	return df
 
 
+def draw_echarts(df, path):
+	line = Line()
+	dt = datetime.now().strftime("%H%M%S")
+	if not(os.path.isdir(path)):
+		os.mkdir(path)
+	path_output = os.path.join(path, "Pnl-%s.html" % dt)
+
+	df_sum = pd.DataFrame(df.cumsum())
+	for i in df_sum.columns.tolist():
+		s = df_sum[i]
+		line.add(
+			i,
+			x_axis=s.index.tolist(),
+			y_axis=s.values.tolist(),
+			is_datazoom_show=True,
+			legend_pos="10%",
+			legend_top='30%'
+		)
+
+	line.render("%s" % path_output)
+	print("--- Render %s ---" % path_output)
+
+
 if __name__ == '__main__':
 	list_type = [ 'Cn.Com.U16.Pattern']
+	path = r'F:/StrategyLogData/StrategyCheck-output'
+	s_dt = datetime.today().strftime('%Y%m%d_%H%M%S')
+	out_put_path = os.path.join(path, s_dt)
+
 	# list_type = ['Cn.Com.U16.CPA', 'Cn.Com.U16.Pattern']
 	start_date = datetime(2018,1,1)
 
@@ -111,8 +140,12 @@ if __name__ == '__main__':
 			list_pnl.append(std_pnl)
 			print('satisfy:')
 			print('%s   : r:%s ,  s:%s' %(strategy_id, series_des_std_pnl.annualized_return, series_des_std_pnl.shape))
+
+		if len(list_pnl) >= 10:
+			df_pnl = pd.DataFrame(pd.concat(list_pnl, axis=1))
+			draw_echarts(df_pnl, out_put_path)
+			# df_pnl.plot()
+			list_pnl = []
 	print('Done!')
-	df_pnl = pd.concat(list_pnl, axis=1)
-	df_pnl.cumsum().plot()
 
 	mssql.close()
