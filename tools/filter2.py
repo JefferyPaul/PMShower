@@ -86,6 +86,10 @@ def get_db_data(db_info, filter_item, start_date, end_date):
 def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trader_pnl):
 	def is_satisfy(strategy):
 		des = strategy.describe(cal_std=True)
+		count = int(des['count'])
+		sharpe = float(des['sharpe'])
+		mdd = float(des['mdd'])
+		annu_R = float(des['annual_return'])
 
 		filter_sharpe = filter_condition['sharpe']
 		filter_R = filter_condition['annul_R']
@@ -96,18 +100,43 @@ def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trade
 		filter_l_mdd = filter_condition['larger_mdd']
 		filter_s_count = filter_condition['smaller_count']
 
-		if not filter_condition['smaller_sharpe']:
-			if str(filter_condition['sharpe']).isdigit():
-				if float(filter_condition['sharpe'])
+		if str(filter_sharpe).isdigit():
+			if not filter_s_sharpe:
+				if sharpe < filter_sharpe:
+					return False
+			else:
+				if sharpe > filter_sharpe:
+					return False
 
+		if str(filter_R).isdigit():
+			if not filter_s_R:
+				if annu_R < filter_R:
+					return False
+			else:
+				if annu_R > filter_R:
+					return False
 
+		if str(filter_count).isdigit():
+			if not filter_s_count:
+				if count < filter_count:
+					return False
+			else:
+				if count > filter_count:
+					return False
 
+		if str(filter_mdd).isdigit():
+			if not filter_l_mdd:
+				if mdd > filter_mdd:
+					return False
+			else:
+				if mdd < filter_mdd:
+					return False
+
+		return True
 
 	df_strategy_info = pd.DataFrame(df_strategy_info, columns=['Id', 'OutSampleDate', 'Type', 'OnlineDate'])
 	df_trader_info = pd.DataFrame(df_trader_info, columns=['TraderId', 'StrategyId'])
 	df_trader_pnl = pd.DataFrame(df_trader_pnl, columns=['Date', 'TraderId', 'Pnl', 'Commission', 'Slippage', 'Capital', 'Returns'])
-
-
 
 	print('set strategy: ', datetime.strftime(datetime.now(), '%H:%M:%S'))
 	dict_strategy = {}
@@ -125,8 +154,11 @@ def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trade
 		obj_strategy.calculate_pnl()
 		if is_satisfy(obj_strategy):
 			dict_strategy[strategy_id] = obj_strategy
-		print('    ', datetime.strftime(datetime.now(), '%H:%M:%S'))
+			print('    ', datetime.strftime(datetime.now(), '%H:%M:%S'), '   Satisfy')
+		else:
+			print('    ', datetime.strftime(datetime.now(), '%H:%M:%S'), '   Not Satisfy')
 	print('All Done:    ', datetime.strftime(datetime.now(),'%H:%M:%S'))
+	return dict_strategy
 
 
 
@@ -187,7 +219,8 @@ if __name__ == '__main__':
 		end_date = filter_condition['end_date']
 
 	df_strategy_info, df_trader_info, df_trader_pnl = get_db_data(db_info, filter_item, start_date, end_date)
-	strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trader_pnl)
+
+	dict_satisfy_strategy = strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trader_pnl)
 
 	# df_strategy_info = pd.DataFrame(df_strategy_info, columns=['Id', 'OutSampleDate', 'Type', 'OnlineDate'])
 	# df_trader_info = pd.DataFrame(df_trader_info, columns=['TraderId', 'StrategyId'])
