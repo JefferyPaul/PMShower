@@ -161,6 +161,55 @@ def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trade
 	return dict_strategy
 
 
+def draw_charts(dict_strategy, path):
+	def draw(df):
+		grid = Grid(
+			width=1200,
+			height=700
+		)
+		line = Line()
+		dt = datetime.now().strftime("%H%M%S")
+		if not (os.path.isdir(path)):
+			os.mkdir(path)
+		path_output = os.path.join(path, "Pnl-%s.html" % dt)
+
+		df_sum = pd.DataFrame(df.cumsum())
+		for i in df_sum.columns.tolist():
+			s = df_sum[i]
+			line.add(
+				i,
+				x_axis=s.index.tolist(),
+				y_axis=s.values.tolist(),
+				is_datazoom_show=True,
+				legend_pos="5%",
+				legend_top='5%'
+			)
+
+		grid.add(line, grid_top='20%')
+		grid.render("%s" % path_output)
+		print("--- Render %s ---" % path_output)
+
+	l_strategy_pnl = []
+	for i in dict_strategy.keys():
+		strategy_i = dict_strategy[i]
+		strategy_i.cal_std_pnl()
+		strategy_id = strategy_i.Id
+		std_pnl = strategy_i.std_pnl
+		std_pnl = std_pnl.set_index('Date', drop=True)
+		std_pnl.rename(columns={'Returns': strategy_id}, inplace=True)
+		l_strategy_pnl.append(std_pnl)
+
+		if len(l_strategy_pnl) >= 10:
+			df_pnl = pd.DataFrame(pd.concat(l_strategy_pnl, axis=1, sort=True))
+			draw(df_pnl)
+			l_strategy_pnl = []
+
+	if len(l_strategy_pnl) > 0:
+		df_pnl = pd.DataFrame(pd.concat(l_strategy_pnl, axis=1, sort=True))
+		draw(df_pnl)
+		l_strategy_pnl = []
+
+	print('Draw All strategy pnl, Finished')
 
 if __name__ == '__main__':
 	program_start = datetime.now()
