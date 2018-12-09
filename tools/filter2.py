@@ -7,11 +7,20 @@ from pyecharts import Line, Grid
 import os
 
 
-def get_db_data(db_info, filter_item, start_date, end_date):
+def get_db_data(db_info, filter_item):
 	db = db_info['db']
 	host = db_info['host']
 	user = db_info['user']
 	pwd = db_info['pwd']
+	start_date = db_info['start_date']
+	if type(start_date) != datetime:
+		start_date = datetime(2015, 1, 1)
+		print('Wrong input db pnl start date, set start date = 20150101')
+	end_date = db_info['end_date']
+	if type(end_date) != datetime:
+		end_date = datetime.today()
+		print('Wrong input db pnl end date, set end date = today')
+
 	mssql = MSSQL(host=host, user=user, pwd=pwd, db=db)
 	func_sql_exec = mssql.ExecQuery
 
@@ -85,12 +94,8 @@ def get_db_data(db_info, filter_item, start_date, end_date):
 
 def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trader_pnl):
 	def is_satisfy(strategy):
-		des = strategy.describe(cal_std=True)
-		count = int(des['count'])
-		sharpe = float(des['sharpe'])
-		mdd = float(des['mdd'])
-		annu_R = float(des['annual_return'])
-
+		filter_start_date = filter_condition['start_date']
+		filter_end_date = filter_condition['end_date']
 		filter_sharpe = filter_condition['sharpe']
 		filter_R = filter_condition['annul_R']
 		filter_mdd = filter_condition['mdd']
@@ -99,6 +104,13 @@ def strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trade
 		filter_s_R = filter_condition['smaller_annul_R']
 		filter_l_mdd = filter_condition['larger_mdd']
 		filter_s_count = filter_condition['smaller_count']
+
+		des = strategy.describe(cal_std=True, start_date=filter_start_date, end_date=filter_end_date)
+		count = int(des['count'])
+		sharpe = float(des['sharpe'])
+		mdd = float(des['mdd'])
+		annu_R = float(des['annual_return'])
+
 
 		if str(filter_sharpe).isdigit():
 			if not filter_s_sharpe:
@@ -211,21 +223,27 @@ def draw_charts(dict_strategy, path):
 
 	print('Draw All strategy pnl, Finished')
 
+
 if __name__ == '__main__':
 	program_start = datetime.now()
 
 	# 设置数据库信息
+	# 此处的date 是取trader_pnl时所指定的日期区间
 	db_info = {
 		"db": "Platinum.PM",
 		"host": "192.168.1.101",
 		"user": "sa",
-		"pwd": "st@s2013"
+		"pwd": "st@s2013",
+		"start_date": datetime(2015, 1, 1),
+		"end_date": datetime.today(),
 	}
 
 	# 设置条件
+	# 此处的date 是在判断是否符合要求时所使用的数据的日期区间
+	# 支持多区间、多条件筛选
 	filter_condition = {
 		"start_date": datetime(2017, 6, 1),
-		"end_date": "",
+		"end_date": datetime.today(),
 
 		"sharpe": 1,
 		"annul_R": 0.1,
@@ -235,7 +253,7 @@ if __name__ == '__main__':
 		"smaller_sharpe": False,
 		"smaller_annul_R": False,
 		"larger_mdd": False,
-		"smaller_count" :False,
+		"smaller_count": False,
 	}
 
 	# 对比项信息
@@ -261,15 +279,13 @@ if __name__ == '__main__':
 		"item": strategy_type_all
 	}
 
-	start_date = filter_condition['start_date']
-	if filter_condition['end_date'] == "":
-		end_date = datetime.today()
-	else:
-		end_date = filter_condition['end_date']
+	output_path = 'F:/StrategyLogData/StrategyCheck-output'
 
-	df_strategy_info, df_trader_info, df_trader_pnl = get_db_data(db_info, filter_item, start_date, end_date)
+	df_strategy_info, df_trader_info, df_trader_pnl = get_db_data(db_info, filter_item)
 
 	dict_satisfy_strategy = strategy_filter(filter_condition, df_strategy_info, df_trader_info, df_trader_pnl)
+
+	draw_charts(dict_satisfy_strategy, output_path)
 
 	# df_strategy_info = pd.DataFrame(df_strategy_info, columns=['Id', 'OutSampleDate', 'Type', 'OnlineDate'])
 	# df_trader_info = pd.DataFrame(df_trader_info, columns=['TraderId', 'StrategyId'])

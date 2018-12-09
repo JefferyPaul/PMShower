@@ -102,26 +102,31 @@ class PMData:
 			dict_describe['ldd_start_date'] = ldd_start_date
 
 		dict_describe = {
-			'count':0,
-			'first_date':"",
-			'last_date':"",
-			'daily_return':np.nan,
-			'annual_return':np.nan,
-			'annual_std':np.nan,
-			'sharpe':np.nan,
-			'mdd':np.nan,
-			'mdd_start_date':"",
-			'mdd_date':"",
-			'ldd':np.nan,
-			'ldd_start_date':"",
-			'ldd_end_date':""
+			'count': 0,
+			'first_date': "",
+			'last_date': "",
+			'daily_return': np.nan,
+			'annual_return': np.nan,
+			'annual_std': np.nan,
+			'sharpe': np.nan,
+			'mdd': np.nan,
+			'mdd_start_date': "",
+			'mdd_date': "",
+			'ldd': np.nan,
+			'ldd_start_date': "",
+			'ldd_end_date': ""
 		}
 
 		df = pd.DataFrame(self.pnl)
 		if start_date is None:
 			start_date = self.start_date.strftime('%Y%m%d')
+		if type(start_date) == datetime:
+			start_date = start_date.strftime('%Y%m%d')
 		if end_date is None:
 			end_date = self.end_date.strftime('%Y%m%d')
+		if type(end_date) == datetime:
+			end_date = end_date.strftime('%Y%m%d')
+
 		df = df.loc[df['Date'] <= end_date, :]
 		df = df.loc[df['Date'] >= start_date, :]
 		df = df.reset_index(drop=True)
@@ -292,6 +297,8 @@ class PMStrategy(PMData):
 			df_r['Date'] = df_r.index
 			df_r = df_r.reset_index(drop=True)
 			self.pnl = df_r
+
+			self.cal_std_pnl()
 		else:
 			pass
 
