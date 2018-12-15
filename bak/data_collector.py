@@ -1,4 +1,4 @@
-from PMDataManager.PMData import *
+from bak.PMData_power import *
 
 
 def get_sql_config():
