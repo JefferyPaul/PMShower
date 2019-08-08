@@ -3,37 +3,60 @@ import pandas as pd
 import numpy as np
 
 
+'''
+	PMData
+		:pnl
+			pd.DataFrame(columns=['Pnl', 'Commission', 'Slippage', 'Capital', 'Returns']), index=[datetime()]
+			包含 多个序列信息
+		:returns
+			pd.DataFrame(columns=['Returns']), index=[datetime()]
+			
+		cal_std()
+			对returns进行标准化 （vol=12%）,
+			需要指定用于计算vol的时间区间，然后对全时间区间进行std,
+			并返回全时间区间的std_returns
+		describe()
+			需要输入两个时间区间，第一个时间区间用于标准化计算和转换（若不做标准化则不需要），第二个时间区间用于 计算统计值。 
+			例如对 2017/1/1 - 2017/12/31数据进行标准化，再计算 2017/6/1 - 2017/12/31的统计值。
+				方法中需要用到range(1,n)记录和计算序列序号，所以需要进行reset_index
+		
+'''
+
+
 class PMData:
-	def __init__(self, Id, type, start_date=datetime(year=2017, month=7, day=1), end_date=datetime.today()):
+	def __init__(self, Id, type, dt_start_date=datetime(year=2017, month=7, day=1), dt_end_date=datetime.today()):
 		self.Id = Id
 		self.type = type
-		self.start_date = start_date
-		self.end_date = end_date
+		self.dt_start_date = dt_start_date
+		self.dt_end_date = dt_end_date
+		self.pnl = pd.DataFrame(columns=['Pnl', 'Commission', 'Slippage', 'Capital', 'Returns'])
+		self.returns = pd.DataFrame(columns=['Returns'])
 
-		self.pnl = pd.DataFrame(columns=['Date', 'Returns'])
-		# self.std_pnl = pd.DataFrame(columns=['Date', 'Returns'])
+	# 计算 return std sharpe mdd等
+	# self.describe( is_use_std=True )时需要用到self.cal_std_returns
+	def describe(self, start_date=None, end_date=None, is_use_std=True, std_start_date=None, std_end_date=None):
+		'''
+		:param start_date:      计算describe数据的起始日期
+		:param end_date:        计算describe数据的结束日期
+		:param is_use_std:      是否需要 标准化数据（使std=12%）
+		:param std_start_date:  用于标准化数据的起始日期
+		:param std_end_date:    用于标准化数据（的结束日期
+		:return:
 
-	def set_start_date(self, dt):
-		if type(dt) == datetime:
-			self.start_date = dt
-		else:
-			pass
+		两组date的用处，如： 2017/1/1 - 2017/12/31数据进行标准化，再计算 2017/6/1 - 2017/12/31的统计值。
+		df_returns: 用于计算describe的df，
+			若不需要标准版df_returns=self.returns，
+			若需要标准化df_returns=pd.DataFrame(self.cal_std_returns(start_date=std_start_date, end_date=std_end_date))
+		'''
 
-	def set_end_date(self, dt):
-		if type(dt) == datetime:
-			self.end_date = dt
-		else:
-			pass
-
-	def describe(self, start_date=None, end_date=None, use_std=None, std_start_date=None, std_end_date=None):
 		def cal_stat():
-			if len(df) < 1:
+			if len(df_returns) < 1:
 				return
-			r_describe = df['Returns'].describe()
+			first_date = min(df_returns['Date'].tolist())
+			last_date = max(df_returns['Date'].tolist())
 
+			r_describe = df_returns['Returns'].describe()
 			count = int(r_describe['count'])
-			first_date = min(df['Date'].tolist())
-			last_date = max(df['Date'].tolist())
 			annual_std = float(r_describe['std']) * np.sqrt(250)
 			daily_return = float(r_describe['mean'])
 			try:
@@ -57,10 +80,10 @@ class PMData:
 			dict_describe['sharpe'] = sharpe
 
 		def cal_mdd():
-			if len(df) < 1:
+			if len(df_returns) < 1:
 				return
-			df['Returns_cumsum'] = df['Returns'].cumsum()
-			df_cum = df[['Date', 'Returns_cumsum']]
+			df_returns['Returns_cumsum'] = df_returns['Returns'].cumsum()
+			df_cum = df_returns[['Date', 'Returns_cumsum']]
 
 			df_cum.loc[:, 'max_here'] = df_cum.loc[:, 'Returns_cumsum'].expanding().max()
 			df_cum.loc[:, 'dd_here'] = df_cum.loc[:, 'max_here'] - df_cum.loc[:, 'Returns_cumsum']
@@ -100,6 +123,7 @@ class PMData:
 			dict_describe['ldd_end_date'] = ldd_end_date
 			dict_describe['ldd_start_date'] = ldd_start_date
 
+		# 初始化describe数值
 		dict_describe = {
 			'count': 0,
 			'first_date': "",
@@ -117,54 +141,68 @@ class PMData:
 		}
 
 		if start_date is None:
-			start_date = self.start_date.strftime('%Y%m%d')
-		if type(start_date) == datetime:
-			start_date = start_date.strftime('%Y%m%d')
+			start_date = self.dt_start_date
 		if end_date is None:
-			end_date = self.end_date.strftime('%Y%m%d')
-		if type(end_date) == datetime:
-			end_date = end_date.strftime('%Y%m%d')
+			end_date = self.dt_end_date
 
-		if use_std:
+		if is_use_std:
+			# 若需要标准化数据，但未传入 std_start_date或std_end_date，便用start_date end_date替代
 			if std_start_date is None:
 				std_start_date = start_date
 			if std_end_date is None:
 				std_end_date = end_date
-			df = pd.DataFrame(self.cal_std_pnl(start_date=std_start_date, end_date=std_end_date))
+			df_returns = pd.DataFrame(self.cal_std_returns(start_date=std_start_date, end_date=std_end_date))
 		else:
-			df = pd.DataFrame(self.pnl)
+			df_returns = pd.DataFrame(self.returns)
 
-		df = df.loc[df['Date'] <= end_date, :]
-		df = df.loc[df['Date'] >= start_date, :]
-		df = df.reset_index(drop=True)
+		# 数据处理
+		if len(df_returns) == 0:
+			return None
+		df_returns = df_returns.reset_index()
+		df_returns = df_returns.loc[df_returns['Date'] <= end_date, :]
+		df_returns = df_returns.loc[df_returns['Date'] >= start_date, :]
+		df_returns = df_returns.reset_index(drop=True)
 
+		# 计算
 		cal_stat()
 		cal_mdd()
 		return dict_describe
 
-	def cal_std_pnl(self, start_date=None, end_date=None):
-		if not (type(self.pnl) == pd.DataFrame):
-			return
+	# 给定日期，进行标准化
+	# 需要用到 self.describe( is_use_std=False )
+	def cal_std_returns(self, start_date=None, end_date=None):
+		if not (type(self.returns) == pd.DataFrame):
+			return None
+		elif len(self.returns) == 0:
+			return None
 		else:
 			if start_date is None or start_date == "":
-				start_date = self.start_date.strftime('%Y%m%d')
+				start_date = self.dt_start_date
 			if end_date is None or end_date == '':
-				end_date = self.end_date.strftime('%Y%m%d')
-			dict_describe = self.describe(start_date=start_date, end_date=end_date)
+				end_date = self.dt_end_date
+			dict_describe = self.describe(start_date=start_date, end_date=end_date, is_use_std=False)
+
+			if dict_describe is None:
+				return None
 			init_annual_std = float(dict_describe['annual_std'])
 			if init_annual_std != 0:
 				mul = 0.12 / init_annual_std
 			else:
 				mul = 0
-			std_pnl = pd.DataFrame(self.pnl).copy()
-			# std_pnl = std_pnl[std_pnl['Date'] > start_date]
-			# std_pnl = std_pnl[std_pnl['Date'] < end_date]
-			std_pnl['Returns'] = std_pnl['Returns'] * mul
-		return std_pnl
+			df_std_returns = pd.DataFrame(self.returns).copy()
+			df_std_returns['Returns'] = df_std_returns['Returns'] * mul
+		return df_std_returns
 
 
 class PMProduct(PMData):
 	def __init__(self, Id, user, product_start_at_create=True, strategy_use_last_portfolio=True):
+		'''
+		:param Id:
+		:param user:
+		:param product_start_at_create:
+		:param strategy_use_last_portfolio: 若使用portfolio的strategy，则存在用哪一个portfolio的问题，
+			若为True则用最后一个，若为False则将各段portfolio连接合并。
+		'''
 		PMData.__init__(self, Id=Id, type='Product')
 		self.portfolio_user_id = user
 		self.list_strategies_id = []
@@ -177,35 +215,58 @@ class PMProduct(PMData):
 
 class PMStrategy(PMData):
 	def __init__(self, Id, portfolio_user_id='Benchmark',
-	             use_last_portfolio=False, list_traders_id=None, list_traders=None,
+	             use_last_portfolio=False, list_trader_id=None, list_traders=None,
 	             strategy_type=None, out_sample_date=None, online_date=None):
+		'''
+		:param Id:
+		:param portfolio_user_id:
+		:param use_last_portfolio:
+		:param list_trader_id: trader的id
+		:param list_traders:用于绑定存放trader实例
+		:param strategy_type:
+		:param out_sample_date:
+		:param online_date:
+		'''
 		PMData.__init__(self, Id=Id, type='Strategy')
 
-		self.list_traders_id = list_traders_id
-		self.portfolio_user_id = portfolio_user_id
-		self.use_last_portfolio = use_last_portfolio
-		self.list_traders = list_traders
+		self.list_trader_id = list_trader_id
+		if not list_traders:
+			self.list_traders = []
+		else:
+			self.list_traders = list_traders
+
 		self.strategy_type = strategy_type
 		self.out_sample_date = out_sample_date
 		self.online_date = online_date
 
+		self.portfolio_user_id = portfolio_user_id
+		self.use_last_portfolio = use_last_portfolio
 		self.traders_weight = pd.DataFrame(columns=['Date', 'TraderId', 'Weight'])
 
 	def set_strategy(self, df_trader_pnl):
-		for i_trader_id in self.list_traders_id:
-			obj_trader = PMTrader(i_trader_id, out_sample_date=self.out_sample_date, online_date=self.online_date)
-			obj_trader.pnl = df_trader_pnl[df_trader_pnl['TraderId'] == i_trader_id]
+		if len(self.list_trader_id) == 0:
+			return
+		# 创建trader实例，绑定在 self.list_trader
+		for i_trader_id in self.list_trader_id:
+			obj_trader = PMTrader(
+				i_trader_id,
+				out_sample_date=self.out_sample_date,
+				online_date=self.online_date,
+				belong_strategy_id=self.Id
+			)
+			obj_trader.set_trader_pnl(df_trader_pnl=df_trader_pnl)
 			self.list_traders.append(obj_trader)
-		self.calculate_pnl()
 
-	def calculate_pnl(self):
+		self.calculate_returns()
+
+	def calculate_returns(self):
 		if len(self.list_traders) < 1:
 			return
 
 		if self.portfolio_user_id == 'Benchmark':
-			l_df = [i.pnl for i in self.list_traders]
+			list_trader_returns = [i.returns for i in self.list_traders]
 		else:
-			l_df = []
+			list_trader_returns = []
 			for trader in self.list_traders:
 				df_pnl = trader.pnl
 
@@ -228,19 +289,14 @@ class PMStrategy(PMData):
 						df_merge = df_merge.fillna(method='ffill')
 						df_merge = df_merge.fillna(method='bfill')
 					df_merge['Returns'] = df_merge['Returns'] * df_merge['Weight']
-					l_df.append(df_merge)
+					list_trader_returns.append(df_merge)
 				except:
 					continue
-		if len(l_df) > 0:
-			df = pd.DataFrame(pd.concat(l_df))
-			df_r = pd.DataFrame(df.groupby(by='Date')['Returns'].sum())
-			# df_r = pd.DataFrame(df.groupby(by='Date')['portfolio_returns'].sum())
-			# df_r.rename(columns={'portfolio_returns':'Returns'}, inplace=True)
-			df_r['Date'] = df_r.index
-			df_r = df_r.reset_index(drop=True)
-			self.pnl = df_r
 
-			self.cal_std_pnl()
+		if len(list_trader_returns) > 0:
+			df_all_returns = pd.DataFrame(pd.concat(list_trader_returns))
+			df_strategy_returns = pd.DataFrame(df_all_returns.groupby(by=df_all_returns.index)['Returns'].sum())
+			self.returns = df_strategy_returns
 		else:
 			pass
 
@@ -252,7 +308,11 @@ class PMTrader(PMData):
 		self.online_date = online_date
 		self.belong_strategy_id = belong_strategy_id
 
-	def set_trader_pnl(self, df):
-		df = df[['Date','Returns']]
-		# df.set_index('Date', drop=True)
+	def set_trader_pnl(self, df_trader_pnl):
+		df = df_trader_pnl.loc[
+			df_trader_pnl['TraderId'] == self.Id,
+			['Date', 'Pnl', 'Commission', 'Slippage', 'Capital', 'Returns']
+		]
+		df = df.set_index('Date', drop=True)
 		self.pnl = df
+		self.returns = df[['Returns']]
